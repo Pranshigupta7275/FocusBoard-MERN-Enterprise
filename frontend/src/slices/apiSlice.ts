@@ -48,7 +48,7 @@ interface PartialRootState {
 export const apiSlice = createApi({
   reducerPath: 'api',
   baseQuery: fetchBaseQuery({
-    baseUrl: 'http://localhost:5000/api',
+    baseUrl: import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : 'http://localhost:5000/api',
     credentials: 'include', 
     prepareHeaders: (headers, { getState }) => {
       // FIXED: Replaced 'any' with PartialRootState
