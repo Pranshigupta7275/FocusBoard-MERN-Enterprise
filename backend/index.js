@@ -14,9 +14,15 @@ config();
 
 const app = express();
 
+// --- CORS CONFIGURATION (MUST BE FIRST) ---
 app.use(cors({
-  origin: ["http://localhost:5173", "http://localhost:5174"], 
+  origin: [
+    "http://localhost:5173", 
+    "http://localhost:5174",
+    "https://focusboard-mern.onrender.com" // <-- Your live frontend added here
+  ], 
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'] // <-- Added to fix preflight error
 }));
 
 app.use(json());
