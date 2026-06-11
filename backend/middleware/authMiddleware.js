@@ -1,11 +1,20 @@
 import jwt from 'jsonwebtoken';
 import User from "../models/User.js";
 
-// Guard: Verify if the user is authenticated via cookie
+// Guard: Verify if the user is authenticated via Header OR Cookie
 export const protect = async (req, res, next) => {
-  // 1. Read the token from the 'token' cookie (matches res.cookie("token", ...))
-  const token = req.cookies.token;
+  let token;
 
+  // 1. FIRST PRIORITY: Look for the token in the Headers (Bypasses Incognito cookie blockers!)
+  if (req.headers.authorization && req.headers.authorization.startsWith("Bearer")) {
+    token = req.headers.authorization.split(" ")[1];
+  } 
+  // 2. SECOND PRIORITY: Fallback to the cookie (if the header is missing)
+  else if (req.cookies.token) {
+    token = req.cookies.token;
+  }
+
+  // 3. IF NO TOKEN FOUND AT ALL
   if (!token) {
     return res.status(401).json({ 
       success: false, 
@@ -14,11 +23,10 @@ export const protect = async (req, res, next) => {
   }
 
   try {
-    // 2. Verify the token using your environment variable secret
+    // 4. Verify the token using your environment variable secret
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // 3. Find the user by ID and attach to request object (excluding password)
-    // Note: ensure 'decoded.id' matches the field used in your generateToken service
+    // 5. Find the user by ID and attach to request object (excluding password)
     req.user = await User.findById(decoded.id).select('-password');
 
     if (!req.user) {
