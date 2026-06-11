@@ -19,7 +19,7 @@ import User from "../models/User.js";
 const cookieOptions = {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production", // Best practice: true in production, false locally
-  sameSite: "lax",      
+  sameSite: "none",      
   maxAge: 60 * 60 * 1000, 
 };
 
