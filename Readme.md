@@ -1,112 +1,80 @@
-FocusBoard: MERN Task Management System
-FocusBoard is a high-performance, full-stack productivity platform built on the MERN stack. It provides users with a secure, responsive, and seamless interface to manage personal tasks efficiently.
+# FocusBoard | Enterprise-Grade Task Lifecycle Management
 
-🚀 Key Features
-Hybrid Authentication: Supports both classic password-based login and passwordless OTP authentication for rapid, secure user access.
+**FocusBoard** is a robust, high-availability task management ecosystem engineered with the MERN stack. Designed for performance and scalability, the platform offers a streamlined, type-safe interface for end-to-end task lifecycle management, featuring advanced authentication patterns and high-performance state synchronization.
 
-Persistent State Management: Leverages Redux Toolkit and RTK Query for automated API caching, synchronization, and real-time UI updates.
+## 🏗 Engineering Architecture
+FocusBoard is built on a decoupled, modular architecture designed for high maintainability and ease of integration.
 
-Secure API Architecture: Implements industry-standard security practices, including JWT-based authentication, HTTP-only cookie storage, and role-based middleware.
+### The Tech Stack
+* **Core:** Node.js, Express.js
+* **Frontend:** React 19+ (Vite), TypeScript, Tailwind CSS
+* **Data Persistence:** MongoDB, Mongoose ODM
+* **State Management:** Redux Toolkit, RTK Query (Optimistic Updates)
+* **Security:** JWT-based stateless Auth, HTTP-Only Cookie implementation
 
-Optimized Performance: Built with Vite and TypeScript to ensure a lightweight, fast-loading, and type-safe frontend.
+---
 
-Dynamic CRUD Operations: Enables real-time creation, retrieval, updates, and deletion of tasks with instant feedback.
+## 🚀 System Dashboards
 
-🛠 Tech Stack
-Frontend
+| Admin Control Center | User Productivity Workspace |
+| :--- | :--- |
+| ![Admin Dashboard](assets/admin-dashboard.png) | ![User Dashboard](assets/user-dashboard.png) |
+| *Administrative User & Task Oversight* | *Personalized Task Lifecycle Management* |
 
-Core: React, TypeScript, Vite
+---
 
-State & API: Redux Toolkit, RTK Query
+## 🛠 Technical Highlights
+* **Advanced Authentication Pipeline:** Hybrid authentication supporting classic credentials and passwordless flows via **HttpOnly cookies** to mitigate XSS/CSRF vectors.
+* **Optimized Data Sync:** Leverages **RTK Query** for automated data caching, polling, and cache invalidation, ensuring a responsive user experience.
+* **Role-Based Access Control (RBAC):** Middleware-driven API architecture ensuring granular permissions for Admins and Standard Users.
+* **Type-Safe Frontend:** Built with **TypeScript** to enforce strict interface definitions for all data models and API interactions.
 
-UI/UX: Responsive CSS, React Toastify, React Router
+---
 
-Backend
-
-Core: Node.js, Express
-
-Database: MongoDB, Mongoose ODM
-
-Security: JSON Web Tokens (JWT), bcryptjs
+## 📂 Project Structure
+```text
+FocusBoard/
+├── assets/             # Documentation & UI Screenshots
+├── backend/            # Express REST API (Controllers, Middleware, Models, Routes)
+└── frontend/           # Vite-powered React SPA (RTK Query Services, UI Components)
 
 💻 Getting Started
 Prerequisites
-Node.js (v16+)
+Node.js: v16+
 
-npm
+Database: MongoDB Atlas
 
-MongoDB instance (Local or MongoDB Atlas)
-
-Environment Variables
-Create a .env file in the backend/ directory:
-
-Code snippet
-PORT=5000
-MONGO_URI=your_mongodb_connection_string
-JWT_SECRET=your_jwt_secret
-JWT_EXPIRES_IN=1h
 Installation
-Clone the repository
+Clone the repository:
 
 Bash
-git clone https://github.com/Pranshigupta7275/mern-task-manager.git
-cd mern-task-manager
-Install backend dependencies
+git clone [https://github.com/Pranshigupta7275/FocusBoard-MERN-Enterprise.git](https://github.com/Pranshigupta7275/FocusBoard-MERN-Enterprise.git)
+cd FocusBoard-MERN-Enterprise
+Setup Backend:
 
 Bash
 cd backend
 npm install
-Install frontend dependencies
+# Create a .env file with MONGO_URI, JWT_SECRET, and PORT
+npm run dev
+Setup Frontend:
 
 Bash
 cd ../frontend
 npm install
-Running the Application
-Start the backend server
-
-Bash
-cd backend
 npm run dev
-Start the frontend development server
+📈 Security & Governance
+This platform adheres to industry-standard security protocols:
 
-Bash
-cd ../frontend
-npm run dev
-Frontend: http://localhost:5173
+JWT Integrity: Stateless token verification for all protected routes.
 
-Backend: http://localhost:5000
+Environment Isolation: Strict handling of secrets via .env configurations.
 
-🏗 API Endpoints
-Method	Endpoint	Description
-POST	/api/auth/register	Register a new user
-POST	/api/auth/login	Login user
-GET	/api/auth/logout	Logout user
-GET	/api/auth/profile	Get current user profile (protected)
-GET	/api/tasks	Get all tasks for user (protected)
-POST	/api/tasks	Create a new task (protected)
-PUT	/api/tasks/:id	Update a task (protected)
-DELETE	/api/tasks/:id	Delete a task (protected)
-📂 Folder Structure
-Plaintext
-mern-task-manager/
-  backend/
-    controllers/
-    middleware/
-    models/
-    routes/
-    config/
-    .env
-    index.js
-    package.json
-  frontend/
-    src/
-      api/        # RTK Query API slice definitions
-      components/ # Reusable UI components
-      context/    # AuthContext provider
-      css/        # Component-specific styles
-      pages/      # View components
-      App.tsx
-      main.tsx
-    package.json
-    vite.config.ts
-Built with passion by Pranshi Gupta.
+API Protection: CORS and helmet integration for production-ready security.
+
+👨‍💻 Author
+Pranshi Gupta | Full Stack Engineer
+
+Building performant, user-centric software architectures.
+
+GitHub | LinkedIn|pranshigupta705@gmail.com
