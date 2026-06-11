@@ -11,51 +11,78 @@ import {
   type Task
 } from "../slices/apiSlice";
 
+// --- STRICT INTERFACES ---
+// Replaces the 'any' in your Redux useSelector
+interface RootAuthState {
+  auth: {
+    userInfo: { token: string } | null;
+  };
+}
+
+// Safely types API errors without using 'any'
+interface ApiError {
+  data?: {
+    message?: string;
+  };
+}
+
 const Dashboard = (): JSX.Element => {
   const navigate = useNavigate();
   const [newTaskTitle, setNewTaskTitle] = useState('');
 
-  // 1. Check auth state
-  const { userInfo } = useSelector((state: any) => state.auth);
+  // 1. Strictly typed auth state
+  const { userInfo } = useSelector((state: RootAuthState) => state.auth);
 
-  // 2. Fetch profile only if authenticated (prevents 401 Unauthorized on load)
+  // 2. Profile data is safely typed by RTK Query
   const { data: profileData } = useGetUserProfileQuery(undefined, { skip: !userInfo });
   const user = profileData?.user;
 
-  // 3. Fetch raw tasks response wrapper safely
-  const { data: response, isLoading, refetch } = useGetTasksQuery(undefined, { skip: !userInfo });
+  // 3. Fetch tasks with proper type inference
+  const { data: response, isLoading: isTasksLoading, refetch } = useGetTasksQuery(undefined, { skip: !userInfo });
   
-  // 4. Defensive Data Extraction
-  const responseObj = response as any;
-  const tasks: Task[] = responseObj?.data || responseObj?.tasks || (Array.isArray(response) ? response : []);
+  // 4. Defensive Data Extraction (Strict Type-Safe)
+  // Safely handles cases where backend wraps the array in an object (e.g., { tasks: [...] })
+  const extractTasks = (): Task[] => {
+    if (!response) return [];
+    if (Array.isArray(response)) return response;
+    
+    const wrappedResponse = response as unknown as { data?: Task[], tasks?: Task[] };
+    return wrappedResponse.data || wrappedResponse.tasks || [];
+  };
+  
+  const tasks: Task[] = extractTasks();
 
-  const [createTask] = useCreateTaskMutation();
+  const [createTask, { isLoading: isCreating }] = useCreateTaskMutation();
   const [updateTask] = useUpdateTaskMutation();
   const [deleteTask] = useDeleteTaskMutation();
 
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTaskTitle.trim()) return;
+    
     try {
-      // Cast payload as any to override strict Partial<Task> limits on mutation triggers
-      await createTask({ title: newTaskTitle, status: 'pending' } as any).unwrap();
+      // Strictly matches Partial<Task> from apiSlice
+      await createTask({ title: newTaskTitle, status: 'pending' }).unwrap();
       setNewTaskTitle('');
       toast.success('Task created successfully');
       refetch();
-    } catch (err: any) {
-      toast.error(err?.data?.message || 'Failed to create task');
+    } catch (err: unknown) {
+      const error = err as ApiError;
+      toast.error(error?.data?.message || 'Failed to create task');
     }
   };
 
-  const handleUpdateTask = async (id: string, currentStatus: any) => {
+  const handleUpdateTask = async (id: string, currentStatus?: string | boolean) => {
     const isCurrentlyCompleted = currentStatus === true || currentStatus === 'completed';
     const nextStatus = isCurrentlyCompleted ? 'pending' : 'completed';
 
     try {
-      await updateTask({ id, data: { status: nextStatus } as any }).unwrap();
+      // Strictly matches Partial<Task>
+      await updateTask({ id, data: { status: nextStatus, completed: !isCurrentlyCompleted } }).unwrap();
       refetch();
-    } catch (err: any) {
-      toast.error(err?.data?.message || "Failed to update task");
+    } catch (err: unknown) {
+      const error = err as ApiError;
+      toast.error(error?.data?.message || "Failed to update task");
     }
   };
 
@@ -64,23 +91,24 @@ const Dashboard = (): JSX.Element => {
       await deleteTask(id).unwrap();
       toast.success("Task deleted");
       refetch();
-    } catch (err: any) {
-      toast.error(err?.data?.message || "Failed to delete task");
+    } catch (err: unknown) {
+      const error = err as ApiError;
+      toast.error(error?.data?.message || "Failed to delete task");
     }
   };
 
-  // 5. Accurate Filter Mapping
+  // 5. Accurate Filter Mapping using strictly typed 'Task'
   const stats = {
     total: tasks.length,
-    completed: tasks.filter((t: any) => t.isCompleted || t.completed === true || t.status === 'completed').length,
-    pending: tasks.filter((t: any) => !(t.isCompleted || t.completed === true || t.status === 'completed')).length
+    completed: tasks.filter((t: Task) => t.isCompleted || t.completed === true || t.status === 'completed').length,
+    pending: tasks.filter((t: Task) => !(t.isCompleted || t.completed === true || t.status === 'completed')).length
   };
 
   if (!userInfo) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen text-slate-500">
         <p className="mb-4">You are not logged in.</p>
-        <button onClick={() => navigate('/login')} className="px-6 py-2 bg-indigo-600 text-white rounded-lg">
+        <button onClick={() => navigate('/login')} className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
           Return to Login
         </button>
       </div>
@@ -93,12 +121,12 @@ const Dashboard = (): JSX.Element => {
         <header className="flex justify-between items-end border-b border-slate-200 pb-6">
           <div>
             <h1 className="text-4xl font-bold text-slate-900">Dashboard</h1>
-            {/* Safe extraction checks to satisfy linter type conditions */}
+            {/* Cleaned up Optional Chaining (No more nasty 'as any' casts!) */}
             <p className="text-slate-500 mt-1">
-              Welcome back, {user && 'username' in user ? (user as any).username : (user && 'name' in user ? (user as any).name : 'User')}
+              Welcome back, {user?.username || user?.name || 'User'}
             </p>
           </div>
-          {user && (user as any).role === 'admin' && (
+          {user?.role === 'admin' && (
             <button 
               onClick={() => navigate('/admin')}
               className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition"
@@ -131,17 +159,22 @@ const Dashboard = (): JSX.Element => {
               placeholder="What needs to be done?"
               value={newTaskTitle}
               onChange={(e) => setNewTaskTitle(e.target.value)}
+              disabled={isCreating}
             />
-            <button className="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700">
-              Add Task
+            <button 
+              type="submit" 
+              disabled={isCreating}
+              className={`px-6 py-3 font-semibold rounded-xl text-white transition ${isCreating ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+            >
+              {isCreating ? 'Adding...' : 'Add Task'}
             </button>
           </form>
 
-          {isLoading ? (
+          {isTasksLoading ? (
             <div className="text-center py-10 text-slate-400">Loading your tasks...</div>
           ) : (
             <ul className="space-y-3">
-              {tasks.map((task: any) => {
+              {tasks.map((task: Task) => {
                 const isTaskDone = task.isCompleted || task.completed === true || task.status === 'completed';
                 return (
                   <li key={task._id} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl group">
