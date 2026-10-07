@@ -18,25 +18,17 @@ const Login = (): JSX.Element => {
     try {
       const response = await login({ email, password }).unwrap();
       
-      // CAST TO ANY: Bypasses strict TS2339 properties error on 'LoginResponse'
       const responseObj = response as any;
-      
-      // Safely extract the nested user structure regardless of API wrapper style
-      const actualUserData = responseObj.data || responseObj.user || responseObj;
+      const actualUserData = responseObj.data?.user || responseObj.user || responseObj;
       
       const userDataToSave = {
         ...actualUserData,
-        // Fallback to ensure token is appended cleanly
-        token: actualUserData.token || responseObj.token 
+        token: responseObj.data?.token || responseObj.token 
       };
       
-      // Save the cleaned user data to Redux
       dispatch(setCredentials(userDataToSave));
-      
-      // Trigger success notification
       toast.success(`Welcome back, ${userDataToSave.name || 'User'}!`);
-
-      // Route based on role
+      
       if (userDataToSave.isAdmin || userDataToSave.role === 'admin') {
         navigate('/admin');
       } else {
@@ -44,7 +36,6 @@ const Login = (): JSX.Element => {
       }
       
     } catch (err: any) {
-      console.error("Login Error Details:", err);
       toast.error(err?.data?.message || 'Login failed. Please check your credentials.');
     }
   };

@@ -1,214 +1,335 @@
-import { useState, type JSX } from 'react';
+import { useCallback, useEffect, useMemo, useState, type JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { toast } from 'react-toastify';
-import { 
-  useGetTasksQuery, 
-  useCreateTaskMutation, 
-  useUpdateTaskMutation, 
+
+import {
+  useGetTasksQuery,
+  useCreateTaskMutation,
+  useUpdateTaskMutation,
   useDeleteTaskMutation,
   useGetUserProfileQuery,
-  type Task
-} from "../slices/apiSlice";
+  type Task,
+  type TaskStatus,
+  type TaskPriority,
+} from '../slices/apiSlice';
 
-// --- STRICT INTERFACES ---
-// Replaces the 'any' in your Redux useSelector
-interface RootAuthState {
-  auth: {
-    userInfo: { token: string } | null;
-  };
-}
+import { type RootState } from '../store';
 
-// Safely types API errors without using 'any'
-interface ApiError {
-  data?: {
-    message?: string;
-  };
-}
+import {
+  LoadingState,
+  EmptyState,
+  ErrorState,
+  TaskStats,
+  TaskFilters,
+  TaskCard,
+  TaskModal,
+  Pagination,
+} from '../components/dashboard';
+
+const LIMIT = 8;
 
 const Dashboard = (): JSX.Element => {
   const navigate = useNavigate();
-  const [newTaskTitle, setNewTaskTitle] = useState('');
 
-  // 1. Strictly typed auth state
-  const { userInfo } = useSelector((state: RootAuthState) => state.auth);
+  const { userInfo } = useSelector((state: RootState) => state.auth);
 
-  // 2. Profile data is safely typed by RTK Query
-  const { data: profileData } = useGetUserProfileQuery(undefined, { skip: !userInfo });
+  const { data: profileData } = useGetUserProfileQuery(undefined, {
+    skip: !userInfo,
+  });
+
   const user = profileData?.user;
 
-  // 3. Fetch tasks with proper type inference
-  const { data: response, isLoading: isTasksLoading, refetch } = useGetTasksQuery(undefined, { skip: !userInfo });
-  
-  // 4. Defensive Data Extraction (Strict Type-Safe)
-  // Safely handles cases where backend wraps the array in an object (e.g., { tasks: [...] })
-  const extractTasks = (): Task[] => {
-    if (!response) return [];
-    if (Array.isArray(response)) return response;
-    
-    const wrappedResponse = response as unknown as { data?: Task[], tasks?: Task[] };
-    return wrappedResponse.data || wrappedResponse.tasks || [];
-  };
-  
-  const tasks: Task[] = extractTasks();
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [priorityFilter, setPriorityFilter] = useState('');
+  const [page, setPage] = useState(1);
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+
+  const {
+    data: tasksResponse,
+    isLoading: isTasksLoading,
+    isFetching: isTasksFetching,
+    isError: isTasksError,
+  } = useGetTasksQuery(
+    {
+      search: search.trim() || undefined,
+      status: statusFilter || undefined,
+      priority: priorityFilter || undefined,
+      page,
+      limit: LIMIT,
+    },
+    {
+      skip: !userInfo,
+    }
+  );
 
   const [createTask, { isLoading: isCreating }] = useCreateTaskMutation();
-  const [updateTask] = useUpdateTaskMutation();
-  const [deleteTask] = useDeleteTaskMutation();
+  const [updateTask, { isLoading: isUpdating }] = useUpdateTaskMutation();
+  const [deleteTask, { isLoading: isDeleting }] = useDeleteTaskMutation();
 
-  const handleCreateTask = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTaskTitle.trim()) return;
-    
-    try {
-      // Strictly matches Partial<Task> from apiSlice
-      await createTask({ title: newTaskTitle, status: 'pending' }).unwrap();
-      setNewTaskTitle('');
-      toast.success('Task created successfully');
-      refetch();
-    } catch (err: unknown) {
-      const error = err as ApiError;
-      toast.error(error?.data?.message || 'Failed to create task');
-    }
-  };
+  const tasks = tasksResponse?.data ?? [];
+  const pagination = tasksResponse?.pagination;
 
-  const handleUpdateTask = async (id: string, currentStatus?: string | boolean) => {
-    const isCurrentlyCompleted = currentStatus === true || currentStatus === 'completed';
-    const nextStatus = isCurrentlyCompleted ? 'pending' : 'completed';
+  const stats = useMemo(() => {
+    return {
+      total: pagination?.totalCount ?? tasks.length,
+      pending: tasks.filter((task) => task.status.toLowerCase() === 'pending').length,
+      inProgress: tasks.filter((task) => task.status.toLowerCase() === 'in progress').length,
+      completed: tasks.filter((task) => task.status.toLowerCase() === 'completed').length,
+    };
+  }, [tasks, pagination]);
 
-    try {
-      // Strictly matches Partial<Task>
-      await updateTask({ id, data: { status: nextStatus, completed: !isCurrentlyCompleted } }).unwrap();
-      refetch();
-    } catch (err: unknown) {
-      const error = err as ApiError;
-      toast.error(error?.data?.message || "Failed to update task");
-    }
-  };
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setPage(1);
+    }, 350);
 
-  const handleDeleteTask = async (id: string) => {
-    try {
-      await deleteTask(id).unwrap();
-      toast.success("Task deleted");
-      refetch();
-    } catch (err: unknown) {
-      const error = err as ApiError;
-      toast.error(error?.data?.message || "Failed to delete task");
-    }
-  };
+    return () => window.clearTimeout(timer);
+  }, [search]);
 
-  // 5. Accurate Filter Mapping using strictly typed 'Task'
-  const stats = {
-    total: tasks.length,
-    completed: tasks.filter((t: Task) => t.isCompleted || t.completed === true || t.status === 'completed').length,
-    pending: tasks.filter((t: Task) => !(t.isCompleted || t.completed === true || t.status === 'completed')).length
-  };
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, priorityFilter]);
+
+  const openCreateModal = useCallback(() => {
+    setEditingTask(null);
+    setIsModalOpen(true);
+  }, []);
+
+  const openEditModal = useCallback((task: Task) => {
+    setEditingTask(task);
+    setIsModalOpen(true);
+  }, []);
+
+  const closeModal = useCallback(() => {
+    if (isCreating || isUpdating) return;
+    setIsModalOpen(false);
+    setEditingTask(null);
+  }, [isCreating, isUpdating]);
+
+  const handleSubmit = useCallback(
+    async (payload: {
+      title: string;
+      description: string;
+      status: TaskStatus;
+      priority: TaskPriority;
+      dueDate: string;
+    }) => {
+      if (!payload.title.trim()) {
+        toast.error('Task title is required');
+        return;
+      }
+
+      if (payload.title.trim().length > 200) {
+        toast.error('Task title cannot exceed 200 characters');
+        return;
+      }
+
+      if (payload.description.length > 2000) {
+        toast.error('Description cannot exceed 2000 characters');
+        return;
+      }
+
+      try {
+        const body = {
+          title: payload.title.trim(),
+          description: payload.description.trim(),
+          status: payload.status,
+          priority: payload.priority,
+          dueDate: payload.dueDate || null,
+        };
+
+        if (editingTask) {
+          await updateTask({ id: editingTask._id, data: body }).unwrap();
+          toast.success('Task updated successfully');
+        } else {
+          await createTask(body).unwrap();
+          toast.success('Task created successfully');
+        }
+
+        closeModal();
+      } catch (error) {
+        const apiError = error as { data?: { message?: string } };
+        toast.error(apiError?.data?.message || `Failed to ${editingTask ? 'update' : 'create'} task`);
+      }
+    },
+    [editingTask, createTask, updateTask, closeModal]
+  );
+
+  const handleStatusChange = useCallback(
+    async (task: Task, status: TaskStatus) => {
+      try {
+        await updateTask({ id: task._id, data: { status } }).unwrap();
+        toast.success('Task status updated');
+      } catch (error) {
+        const apiError = error as { data?: { message?: string } };
+        toast.error(apiError?.data?.message || 'Failed to update task status');
+      }
+    },
+    [updateTask]
+  );
+
+  const handleDelete = useCallback(
+    async (task: Task) => {
+      try {
+        await deleteTask(task._id).unwrap();
+        toast.success('Task deleted');
+
+        if (tasks.length === 1 && page > 1) {
+          setPage((current) => current - 1);
+        }
+      } catch (error) {
+        const apiError = error as { data?: { message?: string } };
+        toast.error(apiError?.data?.message || 'Failed to delete task');
+      }
+    },
+    [deleteTask, tasks.length, page]
+  );
+
+  const handleRetry = useCallback(() => {
+    setPage((current) => current);
+  }, []);
 
   if (!userInfo) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen text-slate-500">
-        <p className="mb-4">You are not logged in.</p>
-        <button onClick={() => navigate('/login')} className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
-          Return to Login
-        </button>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-6">
+        <div className="bg-white border border-slate-200 rounded-xl p-8 text-center shadow-sm max-w-md w-full">
+          <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+            </svg>
+          </div>
+
+          <h2 className="text-lg font-semibold text-slate-900">Authentication required</h2>
+
+          <p className="text-slate-500 mt-2 mb-6 text-sm">
+            Please sign in to access your task dashboard.
+          </p>
+
+          <button
+            onClick={() => navigate('/login')}
+            className="w-full rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold py-2.5 transition-colors"
+          >
+            Go to Login
+          </button>
+        </div>
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen bg-slate-50 p-6 md:p-12">
-      <div className="max-w-5xl mx-auto space-y-8">
-        <header className="flex justify-between items-end border-b border-slate-200 pb-6">
-          <div>
-            <h1 className="text-4xl font-bold text-slate-900">Dashboard</h1>
-            {/* Cleaned up Optional Chaining (No more nasty 'as any' casts!) */}
-            <p className="text-slate-500 mt-1">
-              Welcome back, {user?.username || user?.name || 'User'}
-            </p>
-          </div>
-          {user?.role === 'admin' && (
-            <button 
-              onClick={() => navigate('/admin')}
-              className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition"
-            >
-              Admin Panel
-            </button>
-          )}
-        </header>
+  const hasActiveFilters = Boolean(search || statusFilter || priorityFilter);
 
-        {/* Stats Section */}
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {[
-            { label: 'Total Tasks', value: stats.total, color: 'text-indigo-600' },
-            { label: 'Completed', value: stats.completed, color: 'text-emerald-600' },
-            { label: 'Pending', value: stats.pending, color: 'text-amber-600' }
-          ].map(stat => (
-            <div key={stat.label} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-              <p className="text-sm font-medium text-slate-500">{stat.label}</p>
-              <p className={`text-3xl font-bold ${stat.color}`}>{stat.value}</p>
-            </div>
-          ))}
+  return (
+    <main className="min-h-screen bg-slate-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <section className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+          <div>
+            <p className="text-sm font-medium text-slate-500 mb-1">Task Management</p>
+
+            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900">
+              Good morning, {user?.name || user?.username || 'User'}
+            </h1>
+
+            <p className="text-slate-500 text-sm mt-1">Manage your tasks, stay organized, and keep your work moving forward.</p>
+          </div>
+
+          <div className="flex gap-2.5">
+            {user?.role === 'admin' && (
+              <button
+                onClick={() => navigate('/admin')}
+                className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                Admin Panel
+              </button>
+            )}
+
+            <button
+              onClick={openCreateModal}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 hover:bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              <span className="hidden sm:inline">Create Task</span>
+              <span className="sm:hidden">Create</span>
+            </button>
+          </div>
         </section>
 
-        {/* Form and Task Item List Section */}
-        <section className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-          <form onSubmit={handleCreateTask} className="flex gap-4 mb-8">
-            <input
-              aria-label="Task Title"
-              className="flex-1 p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
-              placeholder="What needs to be done?"
-              value={newTaskTitle}
-              onChange={(e) => setNewTaskTitle(e.target.value)}
-              disabled={isCreating}
-            />
-            <button 
-              type="submit" 
-              disabled={isCreating}
-              className={`px-6 py-3 font-semibold rounded-xl text-white transition ${isCreating ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}
-            >
-              {isCreating ? 'Adding...' : 'Add Task'}
-            </button>
-          </form>
+        <section className="mb-8">
+          <TaskStats {...stats} />
+        </section>
 
-          {isTasksLoading ? (
-            <div className="text-center py-10 text-slate-400">Loading your tasks...</div>
-          ) : (
-            <ul className="space-y-3">
-              {tasks.map((task: Task) => {
-                const isTaskDone = task.isCompleted || task.completed === true || task.status === 'completed';
-                return (
-                  <li key={task._id} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl group">
-                    <div className="flex items-center gap-3">
-                      <input 
-                        type="checkbox"
-                        aria-label={`Mark task titled ${task.title} as ${isTaskDone ? 'incomplete' : 'complete'}`}
-                        checked={isTaskDone}
-                        onChange={() => handleUpdateTask(task._id, task.status || task.completed)}
-                        className="w-5 h-5 accent-indigo-600"
-                      />
-                      <span className={isTaskDone ? 'line-through text-slate-400' : 'text-slate-700'}>
-                        {task.title}
-                      </span>
-                    </div>
-                    <button 
-                      onClick={() => handleDeleteTask(task._id)}
-                      className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition"
-                    >
-                      Delete
-                    </button>
-                  </li>
-                );
-              })}
-              {tasks.length === 0 && (
-                <li className="text-center py-8 text-slate-400 list-none">
-                  No active tasks found. Type a title above to begin tracking workflows!
-                </li>
-              )}
-            </ul>
+        <section className="bg-white border border-slate-200 rounded-xl">
+          <div className="p-5 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
+              <div>
+                <h2 className="text-base font-semibold text-slate-900">My Tasks</h2>
+                <p className="text-sm text-slate-500 mt-0.5">Manage and track your tasks.</p>
+              </div>
+            </div>
+
+            <TaskFilters
+              search={search}
+              status={statusFilter}
+              priority={priorityFilter}
+              onSearchChange={setSearch}
+              onStatusChange={(value) => setStatusFilter(value)}
+              onPriorityChange={(value) => setPriorityFilter(value)}
+              onCreateTask={openCreateModal}
+            />
+          </div>
+
+          {isTasksLoading && <LoadingState count={LIMIT} />}
+
+          {!isTasksLoading && isTasksError && (
+            <ErrorState onRetry={handleRetry} />
+          )}
+
+          {!isTasksLoading && !isTasksError && tasks.length > 0 && (
+            <div className="p-4 sm:p-6 pt-0 space-y-2.5">
+              {tasks.map((task) => (
+                <TaskCard
+                  key={task._id}
+                  task={task}
+                  onEdit={openEditModal}
+                  onDelete={handleDelete}
+                  onStatusChange={handleStatusChange}
+                  isUpdating={isUpdating}
+                  isDeleting={isDeleting}
+                />
+              ))}
+            </div>
+          )}
+
+          {!isTasksLoading && !isTasksError && tasks.length === 0 && (
+            <EmptyState hasFilters={hasActiveFilters} onCreateTask={openCreateModal} />
+          )}
+
+          {pagination && (
+            <Pagination
+              page={pagination.page}
+              totalPages={pagination.totalPages}
+              totalCount={pagination.totalCount}
+              limit={pagination.limit}
+              isFetching={isTasksFetching}
+              onPageChange={setPage}
+            />
           )}
         </section>
       </div>
-    </div>
+
+      <TaskModal
+        isOpen={isModalOpen}
+        editingTask={editingTask}
+        onClose={closeModal}
+        onSubmit={handleSubmit}
+        isSubmitting={isCreating || isUpdating}
+      />
+    </main>
   );
 };
 

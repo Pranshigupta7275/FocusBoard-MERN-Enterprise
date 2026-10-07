@@ -1,6 +1,6 @@
 import { type JSX } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useSelector } from 'react-redux'; 
+import { useSelector, useDispatch } from 'react-redux'; 
 import { toast } from 'react-toastify';
 import { type RootState } from '../store';
 import { 
@@ -8,10 +8,13 @@ import {
   useLogoutMutation,
   type User 
 } from "../slices/apiSlice"; 
+import { logout as logoutAction } from "../slices/authSlice";
+import { apiSlice } from "../slices/apiSlice";
 import '../css/Navbar.css';
 
 const Navbar = (): JSX.Element => {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
 
   // 1. Get immediate auth state from Redux
   const { userInfo } = useSelector((state: RootState) => state.auth);
@@ -34,14 +37,17 @@ const Navbar = (): JSX.Element => {
   const handleLogout = async () => {
     try {
       await logoutUser().unwrap();
-      localStorage.removeItem('token');
-      toast.info('Logged out successfully');
-      navigate('/login');
     } catch {
-      
-      localStorage.removeItem('token');
-      navigate('/login');
+      // Continue with cleanup even if backend call fails
     }
+
+    // Clear ALL frontend auth state
+    dispatch(logoutAction());
+    dispatch(apiSlice.util.resetApiState());
+    localStorage.removeItem('token');
+    localStorage.removeItem('userInfo');
+    toast.info('Logged out successfully');
+    navigate('/login');
   };
 
   return (

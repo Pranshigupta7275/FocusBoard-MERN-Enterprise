@@ -1,7 +1,9 @@
 import React, { useState, type JSX } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
+import { useDispatch } from 'react-redux';
 import { useRequestOtpMutation, useVerifyOtpMutation } from "../slices/apiSlice";
+import { setCredentials } from "../slices/authSlice";
 import '../css/AuthForm.css';
 
 const Passwordless = (): JSX.Element => {
@@ -10,6 +12,7 @@ const Passwordless = (): JSX.Element => {
   const [otp, setOtp] = useState('');
   
   const navigate = useNavigate();
+  const dispatch = useDispatch();
 
   const [requestOtp, { isLoading: isRequesting }] = useRequestOtpMutation();
   const [verifyOtp, { isLoading: isVerifying }] = useVerifyOtpMutation();
@@ -28,9 +31,25 @@ const Passwordless = (): JSX.Element => {
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await verifyOtp({ email, otp }).unwrap();
+      const response = await verifyOtp({ email, otp }).unwrap();
+      
+      const responseObj = response as any;
+      const actualUserData = responseObj.data?.user || responseObj.user || responseObj;
+      
+      const userDataToSave = {
+        ...actualUserData,
+        token: responseObj.data?.token || responseObj.token 
+      };
+      
+      dispatch(setCredentials(userDataToSave));
       toast.success('Successfully authenticated!');
-      navigate('/dashboard'); 
+      
+      if (userDataToSave.isAdmin || userDataToSave.role === 'admin') {
+        navigate('/admin');
+      } else {
+        navigate('/dashboard');
+      }
+      
     } catch (err: any) {
       toast.error(err?.data?.message || 'Invalid or expired OTP code.');
     }

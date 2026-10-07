@@ -1,11 +1,14 @@
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { useLogoutMutation } from '../../slices/apiSlice';
 import { toast } from 'react-toastify';
-import { type RootState } from '../../store'; // ADDED: Imports the missing RootState
+import { type RootState } from '../../store';
+import { logout as logoutAction } from '../../slices/authSlice';
+import { apiSlice } from '../../slices/apiSlice';
 
 const AdminHeader = () => {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const { userInfo } = useSelector((state: RootState) => state.auth);
   const [logoutUser] = useLogoutMutation();
 
@@ -15,16 +18,16 @@ const AdminHeader = () => {
   const handleLogout = async () => {
     try {
       await logoutUser().unwrap();
-      localStorage.removeItem('token');
-      toast.info('Logged out successfully');
-      navigate('/login');
     } catch {
-      // FIXED: Merged the stray brackets. 
-      // If the API call fails, we still show an error and force the local state to clear.
-      toast.error("Logout failed");
-      localStorage.removeItem('token');
-      navigate('/login');
+      // Continue with cleanup even if backend call fails
     }
+
+    dispatch(logoutAction());
+    dispatch(apiSlice.util.resetApiState());
+    localStorage.removeItem('token');
+    localStorage.removeItem('userInfo');
+    toast.info('Logged out successfully');
+    navigate('/login');
   };
 
   return (
