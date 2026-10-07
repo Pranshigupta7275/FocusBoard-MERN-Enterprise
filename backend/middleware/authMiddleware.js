@@ -1,53 +1,46 @@
-import jwt from 'jsonwebtoken';
+import jwt from "jsonwebtoken";
 import User from "../models/User.js";
+import { ApiError } from "../utils/ApiError.js";
 
-// Guard: Verify if the user is authenticated via Header OR Cookie
-export const protect = async (req, res, next) => {
-  let token;
+const protect = async (req, res, next) => {
+  let token = null;
 
-  // 1. FIRST PRIORITY: Look for the token in the Headers (Bypasses Incognito cookie blockers!)
-  if (req.headers.authorization && req.headers.authorization.startsWith("Bearer")) {
+  // 1. Prefer Authorization: Bearer header
+  if (
+    req.headers.authorization &&
+    req.headers.authorization.startsWith("Bearer")
+  ) {
     token = req.headers.authorization.split(" ")[1];
-  } 
-  // 2. SECOND PRIORITY: Fallback to the cookie (if the header is missing)
-  else if (req.cookies.token) {
+  }
+
+  // 2. Fall back to HttpOnly cookie
+  if (!token && req.cookies && req.cookies.token) {
     token = req.cookies.token;
   }
 
-  // 3. IF NO TOKEN FOUND AT ALL
   if (!token) {
-    return res.status(401).json({ 
-      success: false, 
-      message: 'Not authorized, no token provided' 
-    });
+    return next(new ApiError(401, "Not authorized, no token provided"));
   }
 
   try {
-    // 4. Verify the token using your environment variable secret
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // 5. Find the user by ID and attach to request object (excluding password)
-    req.user = await User.findById(decoded.id).select('-password');
-
-    if (!req.user) {
-      return res.status(401).json({ success: false, message: 'User not found' });
+    const user = await User.findById(decoded.id).select("-password");
+    if (!user) {
+      return next(new ApiError(401, "User belonging to this token no longer exists"));
     }
 
-    next(); // Move to the next middleware or controller
+    req.user = user;
+    next();
   } catch (error) {
-    console.error('Auth Middleware Error:', error);
-    res.status(401).json({ success: false, message: 'Not authorized, token failed' });
+    if (error.name === "TokenExpiredError") {
+      return next(new ApiError(401, "Token expired, please login again"));
+    }
+    if (error.name === "JsonWebTokenError") {
+      return next(new ApiError(401, "Invalid token, please login again"));
+    }
+    return next(new ApiError(401, "Not authorized, token verification failed"));
   }
 };
 
-// Guard: Check if the user has 'admin' role
-export const admin = (req, res, next) => {
-  if (req.user && req.user.role === 'admin') {
-    next(); 
-  } else {
-    res.status(403).json({ 
-      success: false, 
-      message: 'Access denied. Not authorized as an admin.' 
-    });
-  }
-};
+export default protect;

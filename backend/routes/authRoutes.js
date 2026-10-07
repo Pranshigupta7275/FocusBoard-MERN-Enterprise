@@ -4,11 +4,11 @@ import {
   loginUser,
   logoutUser,
   getUserProfile,
-  requestOtp,  
-  verifyOtp    
+  requestOtp,
+  verifyOtp
 } from "../controllers/authController.js";
 
-import { protect } from "../middleware/authMiddleware.js";
+import protect from "../middleware/authMiddleware.js";
 import { authorize } from "../middleware/roleMiddleware.js";
 
 const router = express.Router();
@@ -18,8 +18,8 @@ router.post("/register", registerUser);
 router.post("/login", loginUser);
 router.post("/logout", logoutUser);
 
-router.post("/request-otp", requestOtp); 
-router.post("/verify-otp", verifyOtp);   
+router.post("/request-otp", requestOtp);
+router.post("/verify-otp", verifyOtp);
 
 // --- PROTECTED ROUTES ---
 router.get("/profile", protect, getUserProfile);

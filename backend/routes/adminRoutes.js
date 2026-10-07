@@ -1,5 +1,5 @@
 import express from "express";
-import { protect } from "../middleware/authMiddleware.js";
+import protect from "../middleware/authMiddleware.js";
 import { authorize } from "../middleware/roleMiddleware.js";
 // FIXED: 1. Added getUsers to the import list
 import { getDashboardStats, getUsers } from "../controllers/adminController.js";
